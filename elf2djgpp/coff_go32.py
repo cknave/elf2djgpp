@@ -70,6 +70,12 @@ class StringTable:
     def get_offset(self, value: bytes) -> StringTableOffset | None:
         return self._string_offsets.get(value)
 
+    def get_string(self, offset: int) -> bytes:
+        end_idx = self.data[offset:].find(b'\x00')
+        if end_idx == -1:
+            return self.data[offset:]
+        return self.data[offset:end_idx]
+
     @property
     def data(self) -> bytes:
         return self._contents.getvalue()
@@ -85,8 +91,8 @@ class COFF:
     symbols: list[Symbol] = dataclasses.field(default_factory=list)
     strings: StringTable = dataclasses.field(default_factory=StringTable)
     section_for_elf_index: dict[int, Section] = dataclasses.field(default_factory=dict)
-    section_for_elf_section: dict[lief.ELF.Section, Section] = dataclasses.field(default_factory=dict)
-    symbol_for_elf_symbol: dict[lief.ELF.Symbol, Symbol] = dataclasses.field(default_factory=dict)
+    section_for_elf_section_name: dict[str, Section] = dataclasses.field(default_factory=dict)
+    symbol_for_elf_symbol_key: dict[str, Symbol] = dataclasses.field(default_factory=dict)
     index_for_symbol: dict[Symbol, int] = dataclasses.field(default_factory=dict)
 
     def add_elf_section(self, elf_section: lief.Section, elf_section_index: int, section_type: int = 0) -> Section:
@@ -103,62 +109,76 @@ class COFF:
         )
         self.sections.append(section)
         self.section_for_elf_index[elf_section_index] = section
-        self.section_for_elf_section[elf_section] = section
+        if elf_section.name in self.section_for_elf_section_name:
+            raise RuntimeError(f'Attempted to add section {elf_section.name!r} twice')
+        self.section_for_elf_section_name[elf_section.name] = section
         return section
 
     def add_elf_symbol(self, elf_symbol: lief.Symbol) -> Symbol | None:
-        # Section 0 seems to be for undefined symbols
-        is_undefined = elf_symbol.shndx == 0
-
-        name = elf_symbol.name.encode('ascii')
-
-        # Deal with nonexistent compiler-builtins symbols
-        if is_undefined:
-            for prefix, replacement in FIX_EXTERN_SYMBOLS.items():
-                if elf_symbol.demangled_name.startswith(prefix):
-                    print(f'Replacing bad extern "{elf_symbol.demangled_name}" with "{replacement}"')
-                    name = replacement.encode('ascii')
-                    break
-
-        if is_undefined or elf_symbol.is_variable or elf_symbol.is_function:
-            # Add the DJGPP underscore prefix
-            name = b'_' + name
-
-        if len(name) > MAX_NAME_LEN:
-            # Replace with a string table reference if too long
-            name = self.strings.add(name)
-
-        section_number = None
-        if elf_symbol.type == lief.ELF.SYMBOL_TYPES.FILE:
-            storage_class = SymbolStorageClass.file_name
-            section_number = NonSectionSymbol.debugging
-        elif elf_symbol.is_function and elf_symbol.binding == lief.ELF.SYMBOL_BINDINGS.LOCAL:
-            storage_class = SymbolStorageClass.label
-        elif elf_symbol.binding == lief.ELF.SYMBOL_BINDINGS.GLOBAL:
-            storage_class = SymbolStorageClass.external
-        else:
+        if elf_symbol.type == lief.ELF.SYMBOL_TYPES.SECTION:
+            # Special case: section symbols
+            name = self.section_for_elf_index[elf_symbol.shndx].name
+            section_number = self.section_for_elf_index[elf_symbol.shndx].number
             storage_class = SymbolStorageClass.static
+        else:
+            # Normal case: every other kind of symbol
+            name = elf_symbol.name.encode('ascii')
 
-        if section_number is None and elf_symbol.shndx == 0:
-            # Section 0 seems to be for undefined symbols
-            section_number = NonSectionSymbol.extern
+            # Deal with nonexistent compiler-builtins symbols
+            is_undefined = elf_symbol.shndx == 0  # Section 0 seems to be for undefined symbols
+            if is_undefined:
+                for prefix, replacement in FIX_EXTERN_SYMBOLS.items():
+                    if elf_symbol.demangled_name.startswith(prefix):
+                        print(f'Replacing bad extern "{elf_symbol.demangled_name}" with "{replacement}"')
+                        name = replacement.encode('ascii')
+                        break
 
-        if section_number is None:
-            try:
-                section_number = self.section_for_elf_index[elf_symbol.shndx].number
-            except KeyError:
-                print(f'WARNING: Skipping symbol {elf_symbol.name} from skipped section', file=sys.stderr)
-                return None
+            if is_undefined or elf_symbol.is_variable or elf_symbol.is_function:
+                # Add the DJGPP underscore prefix
+                name = b'_' + name
+
+            if len(name) > MAX_NAME_LEN:
+                # Replace with a string table reference if too long
+                name = self.strings.add(name)
+
+            section_number = None
+            if elf_symbol.type == lief.ELF.SYMBOL_TYPES.FILE:
+                storage_class = SymbolStorageClass.file_name
+                section_number = NonSectionSymbol.debugging
+            elif elf_symbol.is_function and elf_symbol.binding == lief.ELF.SYMBOL_BINDINGS.LOCAL:
+                storage_class = SymbolStorageClass.label
+            elif elf_symbol.binding == lief.ELF.SYMBOL_BINDINGS.GLOBAL:
+                storage_class = SymbolStorageClass.external
+            else:
+                storage_class = SymbolStorageClass.static
+
+            if section_number is None and elf_symbol.shndx == 0:
+                # Section 0 seems to be for undefined symbols
+                section_number = NonSectionSymbol.extern
+
+            if section_number is None:
+                try:
+                    section_number = self.section_for_elf_index[elf_symbol.shndx].number
+                except KeyError:
+                    print(f'WARNING: Skipping symbol {elf_symbol.name} from skipped section', file=sys.stderr)
+                    return None
 
         symbol = Symbol(name, elf_symbol.value, section_number, storage_class)
-        self.symbol_for_elf_symbol[elf_symbol] = symbol
+        key = self._elf_symbol_key(elf_symbol)
+        if key in self.symbol_for_elf_symbol_key:
+            raise RuntimeError(f'Attempted to insert symbol with key {key!r} twice')
+        self.symbol_for_elf_symbol_key[key] = symbol
         self.index_for_symbol[symbol] = len(self.symbols)
         self.symbols.append(symbol)
         return symbol
 
+    def get_coff_symbol_for_elf(self, elf_symbol: lief.ELF.Symbol) -> Symbol | None:
+        key = self._elf_symbol_key(elf_symbol)
+        return self.symbol_for_elf_symbol_key.get(key)
+
     def add_relocation(self, elf_relocation: lief.ELF.Relocation) -> Relocation:
-        symbol = self.symbol_for_elf_symbol[elf_relocation.symbol]
-        if elf_relocation.type == lief.ELF.RELOCATION_i386.PC32:
+        symbol = self.get_coff_symbol_for_elf(elf_relocation.symbol)
+        if elf_relocation.type in (lief.ELF.RELOCATION_i386.PC32, lief.ELF.RELOCATION_i386.PLT32):
             rel_type = COFFRelocationType.relative
         elif elf_relocation.type == lief.ELF.RELOCATION_i386.R32:
             rel_type = COFFRelocationType.absolute
@@ -166,7 +186,7 @@ class COFF:
             raise TypeError(f'Cannot represent relocation type {elf_relocation.type}')
         relocation = Relocation(elf_relocation.address, symbol, rel_type, parent=self)
 
-        section = self.section_for_elf_section[elf_relocation.section]
+        section = self.section_for_elf_section_name[elf_relocation.section.name]
         section.relocations.append(relocation)
         return relocation
 
@@ -188,7 +208,6 @@ class COFF:
             # TODO: lineno offset
 
         # Write the data, relocs, and line numbers for each section
-        # TODO: alignment?
         for section in self.sections:
             f.write(section.data)
             for reloc in section.relocations:
@@ -204,6 +223,11 @@ class COFF:
         # Write the string table length as a uint32 before dumping all the strings
         f.write(struct.pack('<I', len(self.strings.data) + STRING_TABLE_BASE_OFFSET))
         f.write(self.strings.data)
+
+    @staticmethod
+    def _elf_symbol_key(symbol: lief.ELF.Symbol) -> str:
+        # Symbol names don't have to be unique, so make a more unique key
+        return f'{symbol.name}.{symbol.shndx}'
 
 
 @dataclasses.dataclass
