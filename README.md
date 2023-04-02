@@ -2,7 +2,7 @@
 
 ## What is this?
 
-- A Python script, `elf2djgpp` that will convert x86 ELF object files to DJGPP COFF-GO32 objects.
+- A Python script, `elf2djgpp`, that will convert x86 ELF object files to DJGPP COFF-GO32 objects.
 - An example project where both C and Rust functions are used, and DJGPP is used as Rust's global
   allocator.
 
