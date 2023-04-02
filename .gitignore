@@ -1,3 +1,6 @@
 *.egg-info
+example/build
+example/rust-lib/Cargo.lock
+example/rust-lib/target
 *.o
 __pycache__
