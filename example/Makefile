@@ -13,7 +13,7 @@ RELEASE_BUILD = build/release
 RELEASE_RUST_DIR = rust-lib/target/release
 
 
-.PHONY: all clean debug prep release
+.PHONY: all clean debug release
 
 all: release
 
