@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "lief==0.12.3",
+    "typing-extensions>=4.0"
 ]
 
 [project.optional-dependencies]

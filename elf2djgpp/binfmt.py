@@ -3,6 +3,8 @@
 http://www.delorie.com/djgpp/doc/coff/
 
 """
+from __future__ import annotations
+
 import dataclasses
 import functools
 import struct
@@ -10,6 +12,11 @@ import time
 import typing
 
 from . import coff_go32
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 COFF_MAGIC = b'\x4c\x01'
 
@@ -33,7 +40,7 @@ class COFFFileHeader:
     flags: coff_go32.COFFFileFlags = uint16_t()
 
     @classmethod
-    def from_coff(cls, coff: coff_go32.COFF) -> typing.Self:
+    def from_coff(cls, coff: coff_go32.COFF) -> Self:
         # Calculate the size of this header and all the sections to find the offset of the symbol table
         header_and_sections_len = struct_size(cls)
         for section in coff.sections:
@@ -76,7 +83,7 @@ class COFFSectionHeader:
     flags: coff_go32.COFFSectionFlags = uint32_t()
 
     @classmethod
-    def from_section(cls, section: coff_go32.Section, raw_data_offset: int) -> typing.Self:
+    def from_section(cls, section: coff_go32.Section, raw_data_offset: int) -> Self:
         name = section.name
         if isinstance(name, coff_go32.StringTableOffset):
             name = f'/{name}'.encode('ascii')
@@ -118,7 +125,7 @@ class COFFSymbol:
     num_aux: int = uint8_t()
 
     @classmethod
-    def from_symbol(cls, symbol: coff_go32.Symbol) -> typing.Self:
+    def from_symbol(cls, symbol: coff_go32.Symbol) -> Self:
         name = symbol.name
         if isinstance(name, coff_go32.StringTableOffset):
             # String reference is four 00 bytes followed by a uint32 of the string table offset
@@ -140,7 +147,7 @@ class COFFRelocation:
     relocation_type: coff_go32.COFFRelocationType = uint16_t()
 
     @classmethod
-    def from_relocation(cls, relocation: coff_go32.Relocation) -> typing.Self:
+    def from_relocation(cls, relocation: coff_go32.Relocation) -> Self:
         symbol_idx = relocation.parent.index_for_symbol[relocation.symbol]
         return cls(relocation.address, symbol_idx, relocation.type)
 
