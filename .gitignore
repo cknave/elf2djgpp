@@ -4,3 +4,8 @@ example/rust-lib/Cargo.lock
 example/rust-lib/target
 *.o
 __pycache__
+
+
+# Added by cargo
+
+/target
