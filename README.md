@@ -25,9 +25,9 @@ You'll need these installed:
 
 Build release or debug binaries:
 
-    (.venv) $ cd example
-    (.venv) $ make release  # creates build/release/example.exe
-    (.venv) $ make debug    # creates build/debug/example.exe (much larger)
+    $ cd example
+    $ make release  # creates build/release/example.exe
+    $ make debug    # creates build/debug/example.exe (much larger)
 
 ## Should I use this for anything serious?
 
