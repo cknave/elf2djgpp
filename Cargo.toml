@@ -1,0 +1,18 @@
+[package]
+name = "elf2djgpp"
+version = "1.0.0"
+edition = "2021"
+authors = ["kvance <kvance@kvance.com>"]
+description = "Convert x86 ELF objects to DJGPP COFF-GO32 objects"
+license = "MIT"
+categories = ["command-line-utilities", "development-tools::build-utils", "encoding"]
+
+[dependencies]
+bitflags = "2.3.3"
+bytemuck = "1.13.1"
+clap = { version = "4.3.21", features = ["derive"] }
+elf = "0.7.2"
+log = "0.4.20"
+rustc-demangle = "0.1.23"
+simplelog = "0.12.1"
+tempfile = "3.7.1"

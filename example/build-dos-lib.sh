@@ -41,11 +41,16 @@ cd ../build/$target/djgpp-lib
 rm -f *.o
 llvm-ar x ../../../rust-lib/target/i586-unknown-none-gnu/"$target"/librust_lib.a
 
+echo "Building release elf2djgpp..."
+cd ../../../..
+cargo build --release
+
 echo "Converting ELF objects to COFF-GO32..."
-for f in *.o; do
-    elf2djgpp -q -i $f
+for f in example/build/$target/djgpp-lib/*.o; do
+    ./target/release/elf2djgpp -q -i $f
 done
-rm -f ../librust_lib.a
-llvm-ar cr ../librust_lib.a *.o
+cd example/build/$target
+rm -f librust_lib.a
+llvm-ar cr librust_lib.a djgpp-lib/*.o
 
 echo "build/$target/librust_lib.a built"
