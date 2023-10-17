@@ -29,13 +29,15 @@ pub const IGNORE_ELF_SECTION_TYPES: [u32; 5] = [
 ];
 
 /// Pairs of section name prefixes and the corresponding COFF section type
-pub const ELF_SECTION_TYPE_PREFIXES: [(&str, CoffSectionType); 6] = [
+pub const ELF_SECTION_TYPE_PREFIXES: [(&str, CoffSectionType); 8] = [
     (".text", CoffSectionType::Text),
     (".data", CoffSectionType::Data),
     (".rodata", CoffSectionType::Data),
     (".bss", CoffSectionType::Bss),
     (".debug", CoffSectionType::Unknown),
     (".note.GNU-stack", CoffSectionType::Unknown),
+    (".comment", CoffSectionType::Unknown),
+    (".eh_frame", CoffSectionType::Unknown),
 ];
 
 /// Section name prefix for relocation sections.  Should be followed by the section name that
